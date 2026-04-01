@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(curl -s http://localhost:3001/api/health)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill:*)",
+      "Bash(curl -s http://localhost:3001/api/estimates)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(curl -s http://localhost:5175/)"
+    ]
+  }
+}
