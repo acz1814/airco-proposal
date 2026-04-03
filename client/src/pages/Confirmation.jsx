@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { formatCurrency } from '../utils/formatters';
 import { matchOptions } from '../utils/matchingEngine';
+import ProgressBar from '../components/ProgressBar';
 
 export default function Confirmation() {
   const { estimateId } = useParams();
@@ -36,6 +37,8 @@ export default function Confirmation() {
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-2xl mx-auto px-6 py-12 md:py-20 text-center">
+        <ProgressBar currentStep={4} />
+
         {/* Green checkmark animation */}
         <div className="mb-8">
           <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto animate-bounce-once">
@@ -45,9 +48,14 @@ export default function Confirmation() {
           </div>
         </div>
 
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-4">
+        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-2">
           You're All Set, {firstName}!
         </h1>
+        {location.state?.homeownerEmail && (
+          <p className="text-sm text-gray-500 mb-4">
+            A receipt has been sent to {location.state.homeownerEmail}
+          </p>
+        )}
 
         {/* Summary */}
         <div className="bg-gray-50 rounded-2xl p-6 mb-8 text-left">

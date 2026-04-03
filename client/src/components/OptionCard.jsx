@@ -12,6 +12,11 @@ const tierBg = {
   Premium: 'bg-indigo-600 text-white'
 };
 
+function parseWarrantyYears(str) {
+  const m = str && str.match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : 1;
+}
+
 export default function OptionCard({ option, isSelected, onSelect, onLearnMore }) {
   return (
     <div className={`relative bg-white rounded-2xl border-2 p-6 transition-all hover:shadow-lg flex flex-col
@@ -36,8 +41,8 @@ export default function OptionCard({ option, isSelected, onSelect, onLearnMore }
         {option.efficiency}
       </div>
 
-      <div className="flex-grow">
-        <ul className="space-y-2 mb-4">
+      <div className="flex-grow flex flex-col">
+        <ul className="space-y-2 mb-4 flex-grow">
           {option.keyBenefits.slice(0, 3).map((benefit, i) => (
             <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
               <svg className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -48,9 +53,34 @@ export default function OptionCard({ option, isSelected, onSelect, onLearnMore }
           ))}
         </ul>
 
-        <p className="text-sm text-gray-500 mb-1">
-          Warranty: {option.warranty.parts} Parts · {option.warranty.labor} Labor
-        </p>
+        <div className="mt-auto flex justify-center text-sm text-gray-500">
+          <div className="inline-grid gap-y-1 gap-x-1" style={{ gridTemplateColumns: 'auto auto auto auto auto' }}>
+            <span className="font-medium text-gray-600">Warranty:</span>
+            <span>Parts</span>
+            <select
+              defaultValue={parseWarrantyYears(option.warranty.parts)}
+              className="border border-gray-200 rounded px-1.5 py-0.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            <span>yr</span>
+            <span></span>
+            <span></span>
+            <span>Labor</span>
+            <select
+              defaultValue={parseWarrantyYears(option.warranty.labor)}
+              className="border border-gray-200 rounded px-1.5 py-0.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            <span>yr</span>
+            <span></span>
+          </div>
+        </div>
       </div>
 
       <div className="mt-4 space-y-2">

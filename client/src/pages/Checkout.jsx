@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import ProgressBar from '../components/ProgressBar';
-import { addons as allAddons } from '../data/addons';
-import { financingPlans } from '../data/financing';
-import { matchOptions, calculateMonthlyPayment } from '../utils/matchingEngine';
+import { matchOptions } from '../utils/matchingEngine';
 import { formatCurrency, fireTrigger } from '../utils/formatters';
 
 export default function Checkout() {
@@ -12,24 +10,31 @@ export default function Checkout() {
   const location = useLocation();
 
   const [selectedOption, setSelectedOption] = useState(location.state?.selectedOption || null);
-  const [selectedAddonIds, setSelectedAddonIds] = useState(location.state?.selectedAddons || []);
   const [estimate, setEstimate] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [sendingReceipt, setSendingReceipt] = useState(false);
 
-  const [financingPlanId, setFinancingPlanId] = useState('plan-18mo');
-  const [financingState, setFinancingState] = useState('idle'); // idle | loading | approved
-  const [paymentState, setPaymentState] = useState('idle'); // idle | loading | success | error
-  const [paymentType, setPaymentType] = useState('full');
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [signature, setSignature] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState(null); // 'financing' | 'stripe'
+  // Payment state
+  const [paymentChoice, setPaymentChoice] = useState('deposit');
+  const [depositAmount, setDepositAmount] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvv, setCvv] = useState('');
+  const [nameOnCard, setNameOnCard] = useState('');
+
+  // Customize data from sessionStorage
+  const customizeData = JSON.parse(sessionStorage.getItem(`customize_${estimateId}`) || '{}');
+  const summaryData = JSON.parse(sessionStorage.getItem('airco_customize_summary') || '{}');
+  const iaqTotal = customizeData.iaqIncluded ? (customizeData.iaqAfterDiscount || 0) : 0;
+  const miscTotal = customizeData.miscIncluded ? (customizeData.miscAfterDiscount || 0) : 0;
 
   useEffect(() => {
-    if (!selectedOption) {
-      fetch(`/api/estimates/${estimateId}`)
-        .then(r => r.json())
-        .then(data => {
-          if (data.estimate) {
-            setEstimate(data.estimate);
+    fetch(`/api/estimates/${estimateId}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.estimate) {
+          setEstimate(data.estimate);
+          if (!selectedOption) {
             const options = matchOptions(
               data.estimate.jobDetails.tonnage,
               data.estimate.jobDetails.systemType,
@@ -37,92 +42,104 @@ export default function Checkout() {
             );
             const opt = options.find(o => o.id === data.estimate.selectedOptionId);
             if (opt) setSelectedOption(opt);
-            if (data.estimate.selectedAddons?.length) setSelectedAddonIds(data.estimate.selectedAddons);
           }
-        });
-    }
+        }
+      });
   }, [estimateId, selectedOption]);
 
-  const selectedAddonItems = allAddons.filter(a => selectedAddonIds.includes(a.id));
-  const addonTotal = selectedAddonItems.reduce((sum, a) => sum + a.price, 0);
-  const basePrice = selectedOption?.totalPrice || 0;
-  const rebate = selectedOption?.rebates || 0;
-  const finalTotal = basePrice + addonTotal - rebate;
-  const depositAmount = Math.round(finalTotal * 0.1);
+  const systemPrice = selectedOption?.totalPrice || 0;
+  const grandTotal = summaryData.totalInvestmentAfterDiscount || (systemPrice + iaqTotal + miscTotal);
 
-  const selectedPlan = financingPlans.find(p => p.id === financingPlanId);
-  const monthlyPayment = selectedPlan
-    ? calculateMonthlyPayment(finalTotal, selectedPlan.apr, selectedPlan.months)
-    : 0;
+  // Default deposit to 10% of grand total
+  const effectiveDeposit = depositAmount !== '' ? (parseFloat(depositAmount) || 0) : Math.round(grandTotal * 0.1);
 
-  const handleFinancingApply = async () => {
-    setPaymentMethod('financing');
-    setFinancingState('loading');
-    await fireTrigger(estimateId, 'financing_started');
-    await fetch(`/api/estimates/${estimateId}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'financing_started' })
-    });
-
-    setTimeout(async () => {
-      setFinancingState('approved');
-      await fireTrigger(estimateId, 'payment_completed', { method: 'financing' });
-    }, 2000);
+  const formatCardNumber = (value) => {
+    const digits = value.replace(/\D/g, '').slice(0, 16);
+    return digits.replace(/(.{4})/g, '$1 ').trim();
   };
 
-  const handleStripePayment = async (type) => {
-    setPaymentMethod('stripe');
-    setPaymentType(type);
-    setPaymentState('loading');
-
-    const amount = type === 'full' ? finalTotal : depositAmount;
-
-    setTimeout(async () => {
-      const res = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estimateId, amount, paymentType: type })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setPaymentState('success');
-        await fireTrigger(estimateId, 'payment_completed', { method: 'stripe', paymentType: type });
-      } else {
-        setPaymentState('error');
-      }
-    }, 1500);
+  const formatExpiry = (value) => {
+    const digits = value.replace(/\D/g, '').slice(0, 4);
+    if (digits.length > 2) return digits.slice(0, 2) + '/' + digits.slice(2);
+    return digits;
   };
-
-  const canComplete = termsAccepted && signature.trim().length > 2 &&
-    (financingState === 'approved' || paymentState === 'success');
 
   const handleComplete = async () => {
-    const paymentStatus = financingState === 'approved' ? 'financing_approved'
-      : paymentType === 'full' ? 'paid_in_full' : 'deposit_paid';
+    setSubmitting(true);
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
     await fetch(`/api/estimates/${estimateId}/accept`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        selectedOptionId: selectedOption.id,
-        selectedAddons: selectedAddonIds,
-        subtotal: basePrice,
-        addonTotal,
-        rebate,
-        finalTotal,
-        paymentMethod: paymentMethod,
-        paymentStatus,
+        selectedOptionId: selectedOption?.id,
+        subtotal: systemPrice,
+        iaqTotal,
+        miscTotal,
+        finalTotal: grandTotal,
+        paymentMethod: paymentChoice === 'deposit' ? 'deposit' : 'bill_on_completion',
+        paymentStatus: paymentChoice === 'deposit' ? 'deposit_paid' : 'pending',
+        depositAmount: paymentChoice === 'deposit' ? effectiveDeposit : 0,
         paymentId: `mock_pi_${Date.now().toString(36)}`,
-        financingPlanId: paymentMethod === 'financing' ? financingPlanId : null,
-        monthlyPayment: paymentMethod === 'financing' ? monthlyPayment : null,
-        signature
+        signature: location.state?.signature || ''
       })
     });
 
+    await fireTrigger(estimateId, 'payment_completed', {
+      method: paymentChoice,
+      amount: paymentChoice === 'deposit' ? effectiveDeposit : grandTotal
+    });
     await fireTrigger(estimateId, 'estimate_accepted');
+
+    // Send mock receipt email
+    setSendingReceipt(true);
+    const netInvestmentData = JSON.parse(sessionStorage.getItem('airco_net_investment') || '{}');
+    const cardDigits = cardNumber.replace(/\D/g, '');
+    const homeownerEmail = estimate?.homeowner?.email || '';
+    const homeownerName = `${estimate?.homeowner?.firstName || ''} ${estimate?.homeowner?.lastName || ''}`.trim();
+    const jobAddress = [
+      estimate?.homeowner?.address,
+      estimate?.homeowner?.city,
+      estimate?.homeowner?.state,
+      estimate?.homeowner?.zip
+    ].filter(Boolean).join(', ');
+
+    await fetch('/api/send-receipt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        homeownerName,
+        homeownerEmail,
+        address: jobAddress,
+        systemName: summaryData.systemName || selectedOption?.systemName || '',
+        tier: summaryData.tier || selectedOption?.tier || '',
+        seer2: summaryData.seer2 || selectedOption?.efficiency || '',
+        warranty: summaryData.warranty || (selectedOption?.warranty ? `${selectedOption.warranty.parts} Parts / ${selectedOption.warranty.labor} Labor` : ''),
+        systemCost: summaryData.systemCost || systemPrice,
+        iaqItems: summaryData.iaqItems || 0,
+        totalDiscount: summaryData.totalDiscount || 0,
+        totalInvestmentAfterDiscount: summaryData.totalInvestmentAfterDiscount || grandTotal,
+        netInvestment: netInvestmentData.netInvestment || grandTotal,
+        apr0Monthly: summaryData.apr0Monthly || 0,
+        apr699Monthly: summaryData.apr699Monthly || 0,
+        apr0Years: summaryData.apr0Years || 0,
+        paymentMethod: paymentChoice === 'deposit' ? 'deposit' : 'bill_on_completion',
+        depositAmount: paymentChoice === 'deposit' ? effectiveDeposit : 0,
+        cardLast4: cardDigits.length >= 4 ? cardDigits.slice(-4) : '',
+        initials: location.state?.initials || '',
+        signature: location.state?.signature || '',
+        signatureTimestamp: new Date().toISOString()
+      })
+    });
+    setSendingReceipt(false);
+
     navigate(`/proposal/${estimateId}/confirm`, {
-      state: { selectedOption, finalTotal, paymentMethod, monthlyPayment, signature }
+      state: {
+        selectedOption,
+        finalTotal: grandTotal,
+        paymentMethod: paymentChoice,
+        homeownerEmail,
+      }
     });
   };
 
@@ -139,21 +156,13 @@ export default function Checkout() {
       <div className="bg-white border-b border-gray-100 px-6 py-4">
         <div className="max-w-7xl mx-auto">
           <img src="/airco-logo.png" alt="AiRCO Mechanical" className="h-10 mx-auto"
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.nextSibling.style.display = 'flex';
-            }}
-          />
-          <div className="hidden items-center justify-center gap-1 text-xl font-bold" style={{ display: 'none' }}>
-            <span className="text-blue-700">AiRCO</span>
-            <span className="text-orange-500">Mechanical</span>
-          </div>
+            onError={(e) => { e.target.style.display = 'none'; }} />
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-3xl mx-auto px-6 py-8">
         <button
-          onClick={() => navigate(`/proposal/${estimateId}/addons`)}
+          onClick={() => navigate(-1)}
           className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors mb-4"
           style={{ padding: '16px' }}
         >
@@ -167,171 +176,157 @@ export default function Checkout() {
 
         <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight text-center mb-8">Checkout</h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left: Order Summary */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Order Summary</h2>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <div>
-                  <p className="font-semibold text-gray-900">{selectedOption.systemName}</p>
-                  <p className="text-sm text-gray-500">{selectedOption.tier} · {selectedOption.efficiency}</p>
-                </div>
-                <span className="font-semibold">{formatCurrency(basePrice)}</span>
-              </div>
-              {selectedAddonItems.map(addon => (
-                <div key={addon.id} className="flex justify-between text-sm">
-                  <span className="text-gray-600">{addon.name}</span>
-                  <span className="font-medium">+{formatCurrency(addon.price)}</span>
-                </div>
-              ))}
-              {addonTotal > 0 && (
-                <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span className="font-medium">{formatCurrency(basePrice + addonTotal)}</span>
-                </div>
-              )}
-              {rebate > 0 && (
-                <div className="flex justify-between text-sm text-green-600">
-                  <span>Rebate</span>
-                  <span className="font-medium">-{formatCurrency(rebate)}</span>
-                </div>
-              )}
-              <div className="flex justify-between pt-3 border-t border-gray-200">
-                <span className="text-xl font-bold text-gray-900">Final Total</span>
-                <span className="text-3xl font-bold text-gray-900">{formatCurrency(finalTotal)}</span>
+        {/* Order Summary */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-4">Order Summary</h2>
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <div>
+                <p className="font-semibold text-gray-900">{selectedOption.systemName}</p>
+                <p className="text-sm text-gray-500">{selectedOption.tier} &middot; {selectedOption.efficiency}</p>
               </div>
             </div>
-          </div>
-
-          {/* Right: Payment Options */}
-          <div className="space-y-6">
-            {/* Financing Card */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <img src="/airco-logo.png" alt="AiRCO" className="h-8"
-                  onError={(e) => { e.target.style.display = 'none'; }} />
-                <h3 className="text-lg font-bold text-gray-900">Flexible Monthly Payments</h3>
-              </div>
-
-              {financingState === 'approved' ? (
-                <div className="bg-green-50 rounded-xl p-6 text-center">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <p className="text-lg font-bold text-green-700">Pre-Approved!</p>
-                  <p className="text-green-600">Monthly payment: {formatCurrency(monthlyPayment)}/mo</p>
-                </div>
-              ) : (
-                <>
-                  <select value={financingPlanId} onChange={e => setFinancingPlanId(e.target.value)}
-                    className="w-full border border-gray-300 rounded-xl px-4 py-2.5 mb-3 focus:ring-2 focus:ring-blue-500 outline-none">
-                    {financingPlans.map(plan => (
-                      <option key={plan.id} value={plan.id}>
-                        {plan.name}{plan.tag ? ` (${plan.tag})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-sm text-gray-500 mb-1">{selectedPlan?.description}</p>
-                  <p className="text-lg font-semibold text-blue-700 mb-4">
-                    {formatCurrency(monthlyPayment)}/mo for {selectedPlan?.months} months
-                  </p>
-                  <button onClick={handleFinancingApply} disabled={financingState === 'loading'}
-                    className="w-full bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white rounded-xl px-6 py-3 font-semibold transition-colors">
-                    {financingState === 'loading' ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                        Checking approval...
-                      </span>
-                    ) : 'Apply Now'}
-                  </button>
-                </>
-              )}
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">System Cost</span>
+              <span className="font-medium">{formatCurrency(summaryData.systemCost || systemPrice)}</span>
             </div>
-
-            {/* Stripe Card */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Pay in Full or Leave a Deposit</h3>
-
-              {paymentState === 'success' ? (
-                <div className="bg-green-50 rounded-xl p-6 text-center">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <p className="text-lg font-bold text-green-700">Payment Successful</p>
-                  <p className="text-green-600">{paymentType === 'full' ? 'Paid in full' : 'Deposit received'}</p>
-                </div>
-              ) : paymentState === 'error' ? (
-                <div className="bg-red-50 rounded-xl p-4 text-center mb-4">
-                  <p className="text-red-600 font-medium">Your card was declined. Please try again.</p>
-                </div>
-              ) : null}
-
-              {paymentState !== 'success' && (
-                <div className="space-y-3">
-                  <button onClick={() => handleStripePayment('full')}
-                    disabled={paymentState === 'loading'}
-                    className="w-full bg-gray-900 hover:bg-gray-800 disabled:opacity-50 text-white rounded-xl px-6 py-3 font-semibold transition-colors">
-                    {paymentState === 'loading' && paymentType === 'full' ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                        Processing...
-                      </span>
-                    ) : `Pay ${formatCurrency(finalTotal)}`}
-                  </button>
-                  <button onClick={() => handleStripePayment('deposit')}
-                    disabled={paymentState === 'loading'}
-                    className="w-full border border-gray-300 hover:bg-gray-50 disabled:opacity-50 text-gray-700 rounded-xl px-6 py-3 font-semibold transition-colors">
-                    {paymentState === 'loading' && paymentType === 'deposit' ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <div className="animate-spin w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full" />
-                        Processing...
-                      </span>
-                    ) : `Pay ${formatCurrency(depositAmount)} Deposit`}
-                  </button>
-                </div>
-              )}
+            {(summaryData.iaqItems || 0) > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">IAQ Items</span>
+                <span className="font-medium">+{formatCurrency(summaryData.iaqItems)}</span>
+              </div>
+            )}
+            {(summaryData.totalDiscount || 0) > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Discounts Applied</span>
+                <span className="font-medium text-green-600">-{formatCurrency(summaryData.totalDiscount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between pt-3 border-t border-gray-200">
+              <span className="text-xl font-bold text-gray-900">Grand Total</span>
+              <span className="text-2xl font-bold text-gray-900">{formatCurrency(grandTotal)}</span>
             </div>
           </div>
         </div>
 
-        {/* Below both cards */}
-        <div className="mt-8 max-w-3xl mx-auto space-y-6">
-          <p className="text-xs text-gray-500 text-center italic">
-            *With approved credit. Monthly payment may vary slightly.
-            We do not accept cash. Check or Money Orders must be used for cash discount.
-          </p>
+        {/* Payment Method */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-4">Payment Method</h2>
 
-          <div className="bg-white rounded-2xl border border-gray-200 p-6">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)}
-                className="mt-1 w-5 h-5 text-blue-700 rounded focus:ring-blue-500" />
-              <span className="text-sm text-gray-700">
-                I have read and accept the AiRCO Mechanical Service Agreement{' '}
-                <button className="text-blue-700 underline">View Terms</button>
-              </span>
+          <div className="space-y-3 mb-6">
+            <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-blue-400 cursor-pointer transition-colors">
+              <input
+                type="radio"
+                name="payment"
+                checked={paymentChoice === 'deposit'}
+                onChange={() => setPaymentChoice('deposit')}
+                className="w-4 h-4 text-blue-600"
+              />
+              <span className="font-medium text-gray-900">Pay Deposit Now</span>
             </label>
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Type your full name to sign
-              </label>
-              <input type="text" value={signature} onChange={e => setSignature(e.target.value)}
-                placeholder="Full legal name"
-                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                style={{ fontFamily: 'cursive', fontSize: '1.25rem' }} />
-            </div>
-
-            <button onClick={handleComplete} disabled={!canComplete}
-              className="mt-6 w-full bg-blue-700 hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl px-6 py-4 font-semibold text-lg transition-colors">
-              Complete & Schedule Installation
-            </button>
+            <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-blue-400 cursor-pointer transition-colors">
+              <input
+                type="radio"
+                name="payment"
+                checked={paymentChoice === 'bill'}
+                onChange={() => setPaymentChoice('bill')}
+                className="w-4 h-4 text-blue-600"
+              />
+              <span className="font-medium text-gray-900">Bill on Completion</span>
+            </label>
           </div>
+
+          {paymentChoice === 'deposit' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Deposit Amount</label>
+                <div className="flex items-center gap-1">
+                  <span className="text-gray-500">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={depositAmount !== '' ? depositAmount : Math.round(grandTotal * 0.1)}
+                    onChange={e => setDepositAmount(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
+                <input
+                  type="text"
+                  value={cardNumber}
+                  onChange={e => setCardNumber(formatCardNumber(e.target.value))}
+                  placeholder="XXXX XXXX XXXX XXXX"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                  maxLength={19}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Expiry (MM/YY)</label>
+                  <input
+                    type="text"
+                    value={expiry}
+                    onChange={e => setExpiry(formatExpiry(e.target.value))}
+                    placeholder="MM/YY"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                    maxLength={5}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">CVV</label>
+                  <input
+                    type="text"
+                    value={cvv}
+                    onChange={e => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="CVV"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                    maxLength={4}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name on Card</label>
+                <input
+                  type="text"
+                  value={nameOnCard}
+                  onChange={e => setNameOnCard(e.target.value)}
+                  placeholder="Full name as shown on card"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Complete Purchase */}
+        <button
+          onClick={handleComplete}
+          disabled={submitting || sendingReceipt}
+          className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl px-6 py-4 font-semibold text-lg transition-colors mb-8"
+        >
+          {sendingReceipt ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Sending receipt...
+            </span>
+          ) : submitting ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Processing...
+            </span>
+          ) : 'Complete Purchase'}
+        </button>
       </div>
     </div>
   );

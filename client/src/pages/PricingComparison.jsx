@@ -276,7 +276,19 @@ export default function PricingComparison() {
         <div className="max-w-xl mx-auto space-y-3">
           {selectedSystems.length === 1 && (
             <button
-              onClick={() => navigate(`/proposal/${estimateId}/terms?option=${selectedSystems[0]}`)}
+              onClick={() => {
+                const opt = selectedOptions.find(o => o.id === selectedSystems[0]);
+                if (opt) {
+                  sessionStorage.setItem('airco_net_investment', JSON.stringify({
+                    netInvestment: netInvestment(opt),
+                    systemName: opt.systemName,
+                    tier: opt.tier,
+                    efficiency: opt.efficiency,
+                    warranty: opt.warranty,
+                  }));
+                }
+                navigate(`/proposal/${estimateId}/customize?option=${selectedSystems[0]}`);
+              }}
               className="w-full rounded-xl px-8 py-3 font-semibold transition-colors text-lg bg-blue-700 hover:bg-blue-800 text-white cursor-pointer"
             >
               Select This System & Sign

@@ -75,9 +75,21 @@ export default function ProposalComparison() {
     navigate(`/proposal/${estimateId}/pricing?${params.toString()}`);
   };
 
+  const saveSystemToSession = (opt) => {
+    sessionStorage.setItem('airco_net_investment', JSON.stringify({
+      netInvestment: opt.totalPrice,
+      systemName: opt.systemName,
+      tier: opt.tier,
+      efficiency: opt.efficiency,
+      warranty: opt.warranty,
+    }));
+  };
+
   const handleApproveSign = () => {
     if (compareIds.length === 1) {
-      navigate(`/proposal/${estimateId}/terms?option=${compareIds[0]}`);
+      const opt = options.find(o => o.id === compareIds[0]);
+      if (opt) saveSystemToSession(opt);
+      navigate(`/proposal/${estimateId}/customize?option=${compareIds[0]}`);
     } else {
       // No boxes checked — show modal with all options
       setApproveSelection(null);
@@ -286,8 +298,10 @@ export default function ProposalComparison() {
             <button
               disabled={!approveSelection}
               onClick={() => {
+                const opt = options.find(o => o.id === approveSelection);
+                if (opt) saveSystemToSession(opt);
                 setShowApproveModal(false);
-                navigate(`/proposal/${estimateId}/terms?option=${approveSelection}`);
+                navigate(`/proposal/${estimateId}/customize?option=${approveSelection}`);
               }}
               className="w-full bg-blue-700 hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl px-6 py-3 font-semibold text-lg transition-colors"
             >

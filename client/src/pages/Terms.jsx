@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import ProgressBar from '../components/ProgressBar';
 import { matchOptions } from '../utils/matchingEngine';
-import { fireTrigger } from '../utils/formatters';
+import { fireTrigger, formatCurrency } from '../utils/formatters';
 
 export default function Terms() {
   const { estimateId } = useParams();
@@ -14,6 +14,7 @@ export default function Terms() {
   const [submitted, setSubmitted] = useState(false);
   const [estimate, setEstimate] = useState(null);
   const [selectedSystem, setSelectedSystem] = useState(null);
+  const [summary, setSummary] = useState(null);
   const signatureRef = useRef(null);
 
   const optionId = searchParams.get('option');
@@ -34,6 +35,10 @@ export default function Terms() {
             if (found) setSelectedSystem(found);
           }
         }
+        try {
+          const stored = sessionStorage.getItem('airco_customize_summary');
+          if (stored) setSummary(JSON.parse(stored));
+        } catch {}
       });
   }, [estimateId, optionId]);
 
@@ -99,43 +104,17 @@ export default function Terms() {
       })
     });
     setSubmitting(false);
-    setSubmitted(true);
+    // Navigate to checkout/payment page
+    const customizeData = JSON.parse(sessionStorage.getItem(`customize_${estimateId}`) || '{}');
+    navigate(`/proposal/${estimateId}/checkout`, {
+      state: {
+        selectedOption: selectedSystem,
+        signature,
+        initials,
+        ...customizeData
+      }
+    });
   };
-
-  if (submitted) {
-    return (
-      <div className="min-h-screen bg-green-600 flex items-center justify-center">
-        <div className="text-center text-white px-6 max-w-lg">
-          <div className="mb-6">
-            <svg className="w-24 h-24 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h1 className="text-4xl font-bold mb-4">You're All Set!</h1>
-          {estimate && (
-            <p className="text-xl mb-2">{estimate.homeowner.firstName} {estimate.homeowner.lastName}</p>
-          )}
-          {selectedSystem && (
-            <p className="text-lg mb-6 opacity-90">{selectedSystem.systemName}</p>
-          )}
-          <p className="text-lg mb-2 opacity-90">
-            Our scheduling team will contact you within 24 hours.
-          </p>
-          {estimate?.homeowner?.email && (
-            <p className="text-lg mb-8 opacity-90">
-              Your signed contract has been sent to {estimate.homeowner.email}
-            </p>
-          )}
-          <div className="border-t border-green-400 pt-6 opacity-80">
-            <p className="font-semibold text-lg">AiRCO Mechanical</p>
-            <p className="text-sm">Phone: 512-454-COOL (2665)</p>
-            <p className="text-sm">Email: info@aircoaustin.com</p>
-            <p className="text-sm">www.aircoaustin.com</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -186,6 +165,35 @@ export default function Terms() {
                 <p className="font-semibold text-gray-900">{selectedSystem.warranty.parts} Parts / {selectedSystem.warranty.labor} Labor</p>
               </div>
             </div>
+            {summary && (
+              <>
+                <div className="border-t border-blue-200 my-4" />
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 items-stretch">
+                  <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <p className="text-xs text-gray-500">System Cost</p>
+                    <p className="font-semibold text-gray-900">{formatCurrency(summary.systemCost)}</p>
+                  </div>
+                  {summary.iaqItems > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                      <p className="text-xs text-gray-500">IAQ Items</p>
+                      <p className="font-semibold text-gray-900">{formatCurrency(summary.iaqItems)}</p>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <p className="text-xs text-gray-500">Total Investment After Discount</p>
+                    <p className="font-bold text-gray-900">{formatCurrency(summary.totalInvestmentAfterDiscount)}</p>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <p className="text-xs text-gray-500">0% APR {summary.apr0Years} yrs</p>
+                    <p className="font-semibold text-gray-900">{formatCurrency(summary.apr0Monthly)}/mo</p>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <p className="text-xs text-gray-500">6.99% APR 10 yrs</p>
+                    <p className="font-semibold text-gray-900">{formatCurrency(summary.apr699Monthly)}/mo</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
