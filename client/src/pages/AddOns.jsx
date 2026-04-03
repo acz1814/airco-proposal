@@ -6,6 +6,13 @@ import { addons as allAddons } from '../data/addons';
 import { matchOptions } from '../utils/matchingEngine';
 import { formatCurrency } from '../utils/formatters';
 
+const iaqItems = [
+  { id: 'iaq-prefilter', name: 'Pre Filter Ionizer' },
+  { id: 'iaq-media', name: 'Media Filter' },
+  { id: 'iaq-germicidal', name: 'Germicidal Light (per bulb)' },
+  { id: 'iaq-purifier', name: 'Air Purifier' },
+];
+
 export default function AddOns() {
   const { estimateId } = useParams();
   const navigate = useNavigate();
@@ -13,6 +20,8 @@ export default function AddOns() {
   const [selectedOption, setSelectedOption] = useState(location.state?.selectedOption || null);
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [estimate, setEstimate] = useState(null);
+  const [iaqSelections, setIaqSelections] = useState({});
+  const [iaqPrices, setIaqPrices] = useState({});
 
   useEffect(() => {
     if (!selectedOption) {
@@ -44,9 +53,13 @@ export default function AddOns() {
   const selectedAddonItems = allAddons.filter(a => selectedAddons.includes(a.id));
   const addonTotal = selectedAddonItems.reduce((sum, a) => sum + a.price, 0);
   const addonMonthly = selectedAddonItems.reduce((sum, a) => sum + a.monthlyAddition, 0);
+  const iaqTotal = iaqItems.reduce((sum, item) => {
+    if (iaqSelections[item.id] && iaqPrices[item.id]) return sum + (parseFloat(iaqPrices[item.id]) || 0);
+    return sum;
+  }, 0);
   const basePrice = selectedOption?.totalPrice || 0;
   const rebate = selectedOption?.rebates || 0;
-  const total = basePrice + addonTotal - rebate;
+  const total = basePrice + addonTotal + iaqTotal - rebate;
   const monthly = (selectedOption?.monthlyPayment || 0) + addonMonthly;
 
   // Group addons by category
@@ -84,6 +97,17 @@ export default function AddOns() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
+        <button
+          onClick={() => navigate(`/proposal/${estimateId}`)}
+          className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors mb-4"
+          style={{ padding: '16px' }}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          <span className="text-sm font-medium">Back</span>
+        </button>
+
         <ProgressBar currentStep={2} />
 
         <div className="text-center mb-8">
@@ -98,6 +122,36 @@ export default function AddOns() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Add-on cards */}
           <div className="lg:col-span-2 space-y-8">
+            {/* IAQ Section */}
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 mb-4">Optional Indoor Air Quality (IAQ)</h2>
+              <img src="/airco-iaq-diagram.png" alt="IAQ System" className="w-full max-w-2xl mx-auto my-4 rounded-xl"
+                onError={(e) => { e.target.style.display = 'none'; }} />
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {iaqItems.map(item => (
+                  <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!iaqSelections[item.id]}
+                        onChange={() => setIaqSelections(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                        className="w-4 h-4 text-blue-700 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">{item.name}</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Price"
+                      value={iaqPrices[item.id] || ''}
+                      onChange={e => setIaqPrices(prev => ({ ...prev, [item.id]: e.target.value }))}
+                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:ring-1 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {categories.map(cat => (
               <div key={cat}>
                 <h2 className="text-lg font-bold text-gray-900 mb-4">{cat}</h2>
@@ -135,6 +189,12 @@ export default function AddOns() {
                   <div key={addon.id} className="flex justify-between text-sm">
                     <span className="text-gray-600">{addon.name}</span>
                     <span className="font-medium">+{formatCurrency(addon.price)}</span>
+                  </div>
+                ))}
+                {iaqItems.filter(item => iaqSelections[item.id] && iaqPrices[item.id]).map(item => (
+                  <div key={item.id} className="flex justify-between text-sm">
+                    <span className="text-gray-600">{item.name}</span>
+                    <span className="font-medium">+{formatCurrency(parseFloat(iaqPrices[item.id]) || 0)}</span>
                   </div>
                 ))}
                 {rebate > 0 && (

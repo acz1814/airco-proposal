@@ -71,4 +71,29 @@ router.post('/notify', (req, res) => {
   });
 });
 
+// PHASE 2 PRODUCTION WIRING:
+// 1. Generate PDF from contract data using PDFKit or Puppeteer
+// 2. Upload PDF to GHL contact record via GHL Documents API
+// 3. POST to Axis Op FastAPI gateway (Node 1:8765) for agentic processing
+// 4. Store in DocuSeal on Node 3 for official signed document archive
+// 5. Send webhook to Ntfy (Node 4:2586) to alert Aldo and Bethany of new signed contract
+router.post('/contract', (req, res) => {
+  const { estimateId, signatureText, signatureTimestamp, homeownerName, homeownerEmail, selectedSystem } = req.body;
+
+  console.log('[GHL Contract] New signed contract received:');
+  console.log('  estimateId:', estimateId);
+  console.log('  signatureText:', signatureText);
+  console.log('  signatureTimestamp:', signatureTimestamp);
+  console.log('  homeownerName:', homeownerName);
+  console.log('  homeownerEmail:', homeownerEmail);
+  console.log('  selectedSystem:', selectedSystem);
+
+  res.json({
+    success: true,
+    contractId: 'mock_contract_' + estimateId,
+    message: 'Contract recorded. In production this will: 1) Generate a PDF contract, 2) Upload to GHL contact record, 3) Send to Axis Op agentic system via webhook, 4) Trigger DocuSeal for official document storage on Node 3',
+    timestamp: new Date().toISOString()
+  });
+});
+
 export default router;

@@ -152,6 +152,17 @@ export default function Checkout() {
       </div>
 
       <div className="max-w-5xl mx-auto px-6 py-8">
+        <button
+          onClick={() => navigate(`/proposal/${estimateId}/addons`)}
+          className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors mb-4"
+          style={{ padding: '16px' }}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          <span className="text-sm font-medium">Back</span>
+        </button>
+
         <ProgressBar currentStep={3} />
 
         <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight text-center mb-8">Checkout</h1>

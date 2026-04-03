@@ -8,7 +8,8 @@
       "Bash(taskkill:*)",
       "Bash(curl -s http://localhost:3001/api/estimates)",
       "Bash(curl -s http://localhost:5173/)",
-      "Bash(curl -s http://localhost:5175/)"
+      "Bash(curl -s http://localhost:5175/)",
+      "Bash(npx vite:*)"
     ]
   }
 }

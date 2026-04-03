@@ -1,24 +1,30 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import NavBar from '../components/NavBar';
-import OptionCard from '../components/OptionCard';
-import { matchOptions } from '../utils/matchingEngine';
-import { buildProposalUrl, fireTrigger } from '../utils/formatters';
 
 export default function EstimateBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = !!id;
 
-  const [form, setForm] = useState({
-    firstName: '', lastName: '', phone: '', email: '',
-    address: '', city: '', state: 'TX', zip: '',
-    tonnage: '3', systemType: 'split', fuelType: 'electric', notes: ''
+  const DRAFT_KEY = 'airco_draft';
+
+  const [form, setForm] = useState(() => {
+    const defaults = {
+      firstName: '', lastName: '', phone: '', email: '',
+      address: '', city: '', state: 'TX', zip: '',
+      tonnage: '3', systemType: 'split', fuelType: 'electric', notes: ''
+    };
+    if (!id) {
+      try {
+        const saved = sessionStorage.getItem(DRAFT_KEY);
+        if (saved) return { ...defaults, ...JSON.parse(saved) };
+      } catch {}
+    }
+    return defaults;
   });
-  const [options, setOptions] = useState([]);
-  const [estimateId, setEstimateId] = useState(id || null);
   const [toast, setToast] = useState(null);
-  const [sending, setSending] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     if (isEdit) {
@@ -35,13 +41,18 @@ export default function EstimateBuilder() {
               tonnage: String(e.jobDetails.tonnage), systemType: e.jobDetails.systemType,
               fuelType: e.jobDetails.fuelType, notes: e.jobDetails.notes || ''
             });
-            setOptions(matchOptions(e.jobDetails.tonnage, e.jobDetails.systemType, e.jobDetails.fuelType));
           }
         });
     }
   }, [id, isEdit]);
 
-  const handleChange = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+  const handleChange = (field, value) => setForm(prev => {
+    const next = { ...prev, [field]: value };
+    if (!isEdit) {
+      try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(next)); } catch {}
+    }
+    return next;
+  });
 
   const handleGenerate = async () => {
     if (!form.firstName || !form.lastName || !form.phone || !form.email || !form.tonnage) {
@@ -50,68 +61,41 @@ export default function EstimateBuilder() {
       return;
     }
 
-    const matched = matchOptions(form.tonnage, form.systemType, form.fuelType);
-    setOptions(matched);
+    setGenerating(true);
 
-    if (!estimateId) {
-      const res = await fetch('/api/estimates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          homeowner: {
-            firstName: form.firstName, lastName: form.lastName,
-            phone: form.phone, email: form.email,
-            address: form.address, city: form.city,
-            state: form.state, zip: form.zip
-          },
-          jobDetails: {
-            tonnage: parseFloat(form.tonnage), systemType: form.systemType,
-            fuelType: form.fuelType, notes: form.notes
-          }
-        })
-      });
-      const data = await res.json();
-      if (data.estimate) setEstimateId(data.estimate.id);
+    try {
+      let eid = id;
+
+      if (!eid) {
+        const res = await fetch('/api/estimates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            homeowner: {
+              firstName: form.firstName, lastName: form.lastName,
+              phone: form.phone, email: form.email,
+              address: form.address, city: form.city,
+              state: form.state, zip: form.zip
+            },
+            jobDetails: {
+              tonnage: parseFloat(form.tonnage), systemType: form.systemType,
+              fuelType: form.fuelType, notes: form.notes
+            }
+          })
+        });
+        const data = await res.json();
+        if (!data.estimate) throw new Error('Failed to create estimate');
+        eid = data.estimate.id;
+      }
+
+      const params = new URLSearchParams();
+      ['opt-good', 'opt-better', 'opt-best', 'opt-premium'].forEach(o => params.append('options', o));
+      navigate(`/proposal/${eid}?${params.toString()}`);
+    } catch (err) {
+      setToast({ type: 'error', message: 'Failed to save estimate. Please try again.' });
+      setTimeout(() => setToast(null), 3000);
+      setGenerating(false);
     }
-  };
-
-  const handleSend = async () => {
-    if (!estimateId) return;
-    setSending(true);
-
-    await fetch(`/api/estimates/${estimateId}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'sent' })
-    });
-
-    await fireTrigger(estimateId, 'estimate_sent');
-
-    await fetch('/api/ghl/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        estimateId,
-        type: 'email',
-        recipient: form.email,
-        message: `Hi ${form.firstName}, your HVAC estimate is ready: ${buildProposalUrl(estimateId)}`
-      })
-    });
-
-    await fetch('/api/ghl/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        estimateId,
-        type: 'sms',
-        recipient: form.phone,
-        message: `Hi ${form.firstName}, your AiRCO estimate is ready! View it here: ${buildProposalUrl(estimateId)}`
-      })
-    });
-
-    setSending(false);
-    setToast({ type: 'success', message: `Estimate sent to ${form.firstName} via email and SMS` });
-    setTimeout(() => setToast(null), 4000);
   };
 
   return (
@@ -233,45 +217,18 @@ export default function EstimateBuilder() {
                     rows={3} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none" />
                 </div>
               </div>
-              <button onClick={handleGenerate}
-                className="mt-4 w-full bg-blue-700 hover:bg-blue-800 text-white rounded-xl px-6 py-3 font-semibold transition-colors">
-                Generate Options
+              <button onClick={handleGenerate} disabled={generating}
+                className="mt-4 w-full bg-blue-700 hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl px-6 py-3 font-semibold transition-colors">
+                {generating ? 'Generating...' : 'Generate Options'}
               </button>
             </div>
           </div>
 
-          {/* Right: Generated Options */}
+          {/* Right: Info Panel */}
           <div>
-            {options.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
-                <p className="text-gray-400 text-lg">Fill in job details and click Generate Options</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <h2 className="text-lg font-bold text-gray-900">Generated Options</h2>
-                {options.map(opt => (
-                  <div key={opt.id} className="bg-white rounded-2xl border border-gray-200 p-5">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-bold text-gray-500 uppercase">{opt.tier}</span>
-                      {opt.recommended && (
-                        <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium">Recommended</span>
-                      )}
-                    </div>
-                    <h3 className="font-bold text-gray-900">{opt.systemName}</h3>
-                    <p className="text-sm text-gray-500">{opt.efficiency} · {opt.tonnage} Ton</p>
-                  </div>
-                ))}
-                <button onClick={handleSend} disabled={sending || !estimateId}
-                  className="w-full bg-blue-700 hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl px-6 py-3 font-semibold transition-colors">
-                  {sending ? 'Sending...' : 'Send to Homeowner'}
-                </button>
-                {estimateId && (
-                  <p className="text-xs text-gray-400 text-center mt-2">
-                    Proposal link: {buildProposalUrl(estimateId)}
-                  </p>
-                )}
-              </div>
-            )}
+            <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
+              <p className="text-gray-400 text-lg">Fill in the homeowner info and job details, then click Generate Options to see matching systems.</p>
+            </div>
           </div>
         </div>
       </div>
