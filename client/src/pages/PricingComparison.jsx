@@ -15,6 +15,7 @@ export default function PricingComparison() {
   const [selectedSystems, setSelectedSystems] = useState([]);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendEmail, setSendEmail] = useState('');
+  const [ccEmail, setCcEmail] = useState('');
   const [sending, setSending] = useState(false);
 
   // Per-option editable state keyed by option id
@@ -77,6 +78,7 @@ export default function PricingComparison() {
   const handleOpenSendModal = () => {
     if (!estimate) return;
     setSendEmail(estimate.homeowner?.email || '');
+    setCcEmail('');
     setShowSendModal(true);
   };
 
@@ -91,6 +93,7 @@ export default function PricingComparison() {
           estimateId,
           type: 'email',
           recipient: sendEmail,
+          ccEmail: ccEmail || undefined,
           message: `Pricing comparison with systems: ${systemNames.join(', ')}`
         })
       });
@@ -302,6 +305,15 @@ export default function PricingComparison() {
               type="email"
               value={sendEmail}
               onChange={e => setSendEmail(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+
+            <label className="block text-sm font-medium text-gray-700 mb-1">CC (optional)</label>
+            <input
+              type="email"
+              value={ccEmail}
+              onChange={e => setCcEmail(e.target.value)}
+              placeholder="Add CC email address"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 focus:ring-2 focus:ring-blue-500 outline-none"
             />
 

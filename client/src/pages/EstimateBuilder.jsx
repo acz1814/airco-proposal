@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import NavBar from '../components/NavBar';
 
@@ -25,6 +25,31 @@ export default function EstimateBuilder() {
   });
   const [toast, setToast] = useState(null);
   const [generating, setGenerating] = useState(false);
+  const [photos, setPhotos] = useState([null, null, null]);
+  const fileInputRefs = [useRef(null), useRef(null), useRef(null)];
+
+  const handlePhotoSelect = (index, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPhotos(prev => {
+        const next = [...prev];
+        next[index] = reader.result;
+        return next;
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const removePhoto = (index) => {
+    setPhotos(prev => {
+      const next = [...prev];
+      next[index] = null;
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (isEdit) {
@@ -225,7 +250,50 @@ export default function EstimateBuilder() {
           </div>
 
           {/* Right: Info Panel */}
-          <div>
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4">Job Site Photos (Optional)</h2>
+              <div className="grid grid-cols-3 gap-3">
+                {photos.map((photo, i) => (
+                  <div key={i} className="relative">
+                    <input
+                      ref={fileInputRefs[i]}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={e => handlePhotoSelect(i, e)}
+                    />
+                    {photo ? (
+                      <div
+                        className="aspect-square rounded-xl border-2 border-blue-500 overflow-hidden relative cursor-pointer"
+                        onClick={() => fileInputRefs[i].current?.click()}
+                      >
+                        <img src={photo} alt={`Site photo ${i + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          onClick={e => { e.stopPropagation(); removePhoto(i); }}
+                          className="absolute top-1 right-1 w-6 h-6 bg-black/60 hover:bg-black/80 text-white rounded-full flex items-center justify-center text-sm leading-none"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        className="aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors"
+                        onClick={() => fileInputRefs[i].current?.click()}
+                      >
+                        <svg className="w-8 h-8 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                          <circle cx="12" cy="13" r="3" strokeWidth={1.5} />
+                        </svg>
+                        <span className="text-xs text-gray-400">Tap to add photo</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
               <p className="text-gray-400 text-lg">Fill in the homeowner info and job details, then click Generate Options to see matching systems.</p>
             </div>
