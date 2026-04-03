@@ -1,6 +1,3 @@
-import { formatCurrency, formatMonthly } from '../utils/formatters';
-import FinancingBadge from './FinancingBadge';
-
 const tierColors = {
   Good: 'border-gray-300',
   Better: 'border-blue-400',
@@ -17,21 +14,13 @@ const tierBg = {
 
 export default function OptionCard({ option, isSelected, onSelect, onLearnMore }) {
   return (
-    <div className={`relative bg-white rounded-2xl border-2 p-6 transition-all hover:shadow-lg cursor-pointer
+    <div className={`relative bg-white rounded-2xl border-2 p-6 transition-all hover:shadow-lg flex flex-col
       ${isSelected ? 'border-blue-700 shadow-lg' : tierColors[option.tier] || 'border-gray-200'}
       ${option.recommended ? 'ring-2 ring-blue-200' : ''}`}
     >
       {option.recommended && (
         <div className="absolute -top-3 right-4 bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">
           Recommended
-        </div>
-      )}
-
-      {isSelected && (
-        <div className="absolute top-3 right-3 w-6 h-6 bg-blue-700 rounded-full flex items-center justify-center">
-          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
         </div>
       )}
 
@@ -47,31 +36,21 @@ export default function OptionCard({ option, isSelected, onSelect, onLearnMore }
         {option.efficiency}
       </div>
 
-      <ul className="space-y-2 mb-4">
-        {option.keyBenefits.slice(0, 3).map((benefit, i) => (
-          <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-            <svg className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            {benefit}
-          </li>
-        ))}
-      </ul>
+      <div className="flex-grow">
+        <ul className="space-y-2 mb-4">
+          {option.keyBenefits.slice(0, 3).map((benefit, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+              <svg className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              {benefit}
+            </li>
+          ))}
+        </ul>
 
-      <p className="text-sm text-gray-500 mb-1">
-        Warranty: {option.warranty.parts} Parts · {option.warranty.labor} Labor
-      </p>
-
-      {option.rebates > 0 && (
-        <div className="bg-yellow-50 text-yellow-700 text-sm font-medium px-3 py-1.5 rounded-lg mb-3 inline-block">
-          {formatCurrency(option.rebates)} Rebate Available
-        </div>
-      )}
-
-      <div className="mt-4 pt-4 border-t border-gray-100">
-        <p className="text-sm text-gray-500">Total Investment</p>
-        <p className="text-3xl font-bold text-gray-900">{formatCurrency(option.totalPrice)}</p>
-        <FinancingBadge monthlyPayment={option.monthlyPayment} />
+        <p className="text-sm text-gray-500 mb-1">
+          Warranty: {option.warranty.parts} Parts · {option.warranty.labor} Labor
+        </p>
       </div>
 
       <div className="mt-4 space-y-2">
@@ -81,12 +60,15 @@ export default function OptionCard({ option, isSelected, onSelect, onLearnMore }
         >
           Learn More
         </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onSelect?.(option); }}
-          className="w-full bg-blue-700 hover:bg-blue-800 text-white rounded-xl px-6 py-3 font-semibold text-sm transition-colors"
-        >
-          Select This System
-        </button>
+        <label className="flex items-center justify-center gap-2 w-full py-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => { e.stopPropagation(); onSelect?.(option); }}
+            className="w-4 h-4 text-blue-700 border-gray-300 rounded focus:ring-blue-500"
+          />
+          <span className="text-sm font-semibold text-gray-700">Compare</span>
+        </label>
       </div>
     </div>
   );

@@ -78,16 +78,7 @@ export default function ProposalComparison() {
       {/* Header */}
       <div className="bg-white border-b border-gray-100 px-6 py-6">
         <div className="max-w-7xl mx-auto text-center">
-          <img src="/airco-logo.png" alt="AiRCO Mechanical" className="h-12 mx-auto mb-2"
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.nextSibling.style.display = 'flex';
-            }}
-          />
-          <div className="hidden items-center justify-center gap-1 text-2xl font-bold mb-2" style={{ display: 'none' }}>
-            <span className="text-blue-700">AiRCO</span>
-            <span className="text-orange-500">Mechanical</span>
-          </div>
+          <img src="/airco-logo.png" alt="AiRCO Mechanical" className="h-12 mx-auto mb-2" onError={(e) => { e.target.style.display='none'; }} />
           <p className="text-sm text-gray-500 italic">Comfort in Simplicity</p>
         </div>
       </div>

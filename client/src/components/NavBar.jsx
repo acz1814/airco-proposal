@@ -5,16 +5,7 @@ export default function NavBar({ showNewEstimate = true }) {
     <nav className="bg-white border-b border-gray-200 px-6 py-3">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <Link to="/tech" className="flex items-center gap-2">
-          <img src="/airco-logo.png" alt="AiRCO Mechanical" className="h-10"
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.nextSibling.style.display = 'flex';
-            }}
-          />
-          <div className="hidden items-center gap-1 text-xl font-bold" style={{ display: 'none' }}>
-            <span className="text-blue-700">AiRCO</span>
-            <span className="text-orange-500">Mechanical</span>
-          </div>
+          <img src="/airco-logo.png" alt="AiRCO Mechanical" className="h-12" onError={(e) => { e.target.style.display='none'; }} />
         </Link>
         {showNewEstimate && (
           <Link

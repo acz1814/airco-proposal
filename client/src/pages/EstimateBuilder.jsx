@@ -259,8 +259,6 @@ export default function EstimateBuilder() {
                     </div>
                     <h3 className="font-bold text-gray-900">{opt.systemName}</h3>
                     <p className="text-sm text-gray-500">{opt.efficiency} · {opt.tonnage} Ton</p>
-                    <p className="text-xl font-bold text-gray-900 mt-2">${opt.totalPrice.toLocaleString()}</p>
-                    <p className="text-sm text-blue-700">${opt.monthlyPayment}/mo</p>
                   </div>
                 ))}
                 <button onClick={handleSend} disabled={sending || !estimateId}
