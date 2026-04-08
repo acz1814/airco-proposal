@@ -140,6 +140,62 @@ export default function Terms() {
 
         <ProgressBar currentStep={3} />
 
+        {/* Financial Summary */}
+        {summary && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
+            <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">Financial Summary</h2>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Original System Cost</span>
+                <span className="font-medium text-gray-900">{formatCurrency(summary.originalSystemCost || 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Manufacturer Rebates</span>
+                <span className="font-medium text-green-600">-{formatCurrency(summary.manufacturerRebates || 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Customer Discounts</span>
+                <span className="font-medium text-green-600">-{formatCurrency(summary.customerDiscounts || 0)}</span>
+              </div>
+              <div className="flex justify-between border-t border-gray-200 pt-2">
+                <span className="text-gray-700 font-medium">System Subtotal</span>
+                <span className="font-semibold text-gray-900">{formatCurrency(summary.systemSubtotal || 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">IAQ Total</span>
+                <span className="font-medium text-gray-900">{formatCurrency(summary.iaqTotal || 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Miscellaneous Total</span>
+                <span className="font-medium text-gray-900">{formatCurrency(summary.miscTotal || 0)}</span>
+              </div>
+              <div className="flex justify-between border-t border-gray-200 pt-2">
+                <span className="text-gray-700 font-medium">Total Investment After Discounts</span>
+                <span className="font-semibold text-gray-900">{formatCurrency(summary.totalInvestmentAfterDiscounts || summary.totalInvestmentAfterDiscount || 0)}</span>
+              </div>
+              <div className="flex justify-between border-t border-gray-200 pt-2">
+                <span className="text-gray-900 font-bold">Net Investment</span>
+                <span className="font-bold text-gray-900">{formatCurrency(summary.netInvestment || summary.totalInvestmentAfterDiscount || 0)}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+                <p className="text-xs text-gray-600 uppercase tracking-wide">0% APR for {summary.apr0Years} Yrs</p>
+                <p className="text-blue-700 font-bold mt-1" style={{ fontSize: '24px' }}>
+                  {formatCurrency(summary.apr0Monthly)}<span className="text-base font-semibold">/mo</span>
+                </p>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+                <p className="text-xs text-gray-600 uppercase tracking-wide">6.99% APR for 10 Yrs</p>
+                <p className="text-blue-700 font-bold mt-1" style={{ fontSize: '20px' }}>
+                  {formatCurrency(summary.apr699Monthly)}<span className="text-base font-semibold">/mo</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Selected System Summary */}
         {selectedSystem && (
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 mb-8">

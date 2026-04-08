@@ -22,6 +22,8 @@ export default function Checkout() {
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
   const [nameOnCard, setNameOnCard] = useState('');
+  const [financingProvider, setFinancingProvider] = useState('');
+  const [applicationNumber, setApplicationNumber] = useState('');
 
   // Customize data from estimate-scoped storage
   estimateStorage.setActiveEstimate(estimateId);
@@ -52,8 +54,8 @@ export default function Checkout() {
   const systemPrice = selectedOption?.totalPrice || 0;
   const grandTotal = summaryData.totalInvestmentAfterDiscount || (systemPrice + iaqTotal + miscTotal);
 
-  // Default deposit to 10% of grand total
-  const effectiveDeposit = depositAmount !== '' ? (parseFloat(depositAmount) || 0) : Math.round(grandTotal * 0.1);
+  // Default deposit to 50% of grand total
+  const effectiveDeposit = depositAmount !== '' ? (parseFloat(depositAmount) || 0) : Math.round(grandTotal * 0.5);
 
   const chargeAmount =
     paymentMethod === 'pay_in_full' ? grandTotal :
@@ -108,6 +110,8 @@ export default function Checkout() {
       paymentMethod,
       amount: chargeAmount,
       paymentAmount: chargeAmount,
+      financingProvider: paymentMethod === 'financing' ? financingProvider : '',
+      applicationNumber: paymentMethod === 'financing' ? applicationNumber : '',
     });
     await fireTrigger(estimateId, 'estimate_accepted');
 
@@ -279,7 +283,68 @@ export default function Checkout() {
               />
               <span className="font-medium text-gray-900">Bill on Completion</span>
             </label>
+            <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-blue-400 cursor-pointer transition-colors">
+              <input
+                type="radio"
+                name="payment"
+                checked={paymentMethod === 'financing'}
+                onChange={() => setPaymentMethod('financing')}
+                className="w-4 h-4 text-blue-600"
+              />
+              <span className="font-medium text-gray-900">Financing</span>
+            </label>
           </div>
+
+          {paymentMethod === 'financing' && (
+            <div className="space-y-4 mb-2">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFinancingProvider('goodleap')}
+                  className={`px-4 py-3 rounded-lg border font-semibold transition-colors ${
+                    financingProvider === 'goodleap'
+                      ? 'bg-blue-700 text-white border-blue-700'
+                      : 'bg-white text-gray-900 border-gray-300 hover:border-blue-400'
+                  }`}
+                >
+                  GoodLeap
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFinancingProvider('service_finance')}
+                  className={`px-4 py-3 rounded-lg border font-semibold transition-colors ${
+                    financingProvider === 'service_finance'
+                      ? 'bg-blue-700 text-white border-blue-700'
+                      : 'bg-white text-gray-900 border-gray-300 hover:border-blue-400'
+                  }`}
+                >
+                  Service Finance
+                </button>
+              </div>
+              {financingProvider === 'goodleap' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Application Number</label>
+                  <input
+                    type="text"
+                    value={applicationNumber}
+                    onChange={e => setApplicationNumber(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+              )}
+              {financingProvider === 'service_finance' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Loan Number</label>
+                  <input
+                    type="text"
+                    value={applicationNumber}
+                    onChange={e => setApplicationNumber(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {(paymentMethod === 'deposit' || paymentMethod === 'pay_in_full') && (
             <div className="space-y-4">
@@ -291,7 +356,7 @@ export default function Checkout() {
                     <input
                       type="number"
                       min="0"
-                      value={depositAmount !== '' ? depositAmount : Math.round(grandTotal * 0.1)}
+                      value={depositAmount !== '' ? depositAmount : Math.round(grandTotal * 0.5)}
                       onChange={e => setDepositAmount(e.target.value)}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
                     />

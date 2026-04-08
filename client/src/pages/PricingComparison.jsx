@@ -245,6 +245,15 @@ export default function PricingComparison() {
       apr699Monthly: fixedAprMo,
       apr0Years: aprYears,
       miscDescription: miscRows.filter(r => r.included && r.desc).map(r => r.desc).join(', '),
+      originalSystemCost: sysTotalPrice,
+      manufacturerRebates: sysMfrRebate,
+      customerDiscounts: sysCustomerDiscount + totalDiscountVal,
+      systemSubtotal: sysSubtotal,
+      iaqTotal: iaqNet,
+      miscTotal: miscSubtotal,
+      totalInvestmentAfterDiscounts: totalNetInvestment,
+      netInvestment: Math.max(0, totalNetInvestment - sysUtilRebate),
+      utilityRebates: sysUtilRebate,
     });
 
     navigate(`/proposal/${estimateId}/terms?option=${activeOpt.id}`);
@@ -277,7 +286,7 @@ export default function PricingComparison() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 pt-8 pb-24">
         <button
           onClick={() => navigate(`/proposal/${estimateId}`)}
           className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors mb-4"
@@ -653,13 +662,15 @@ export default function PricingComparison() {
         />
 
         {/* H. CONTINUE */}
-        <button
-          onClick={handleContinue}
-          disabled={!activeOpt}
-          className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-gray-300 text-white rounded-xl px-6 py-4 font-semibold text-lg transition-colors mb-8"
-        >
-          Continue to Sign &rarr;
-        </button>
+        <div className="sticky bottom-4 z-30">
+          <button
+            onClick={handleContinue}
+            disabled={!activeOpt}
+            className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-gray-300 text-white rounded-xl px-6 py-4 font-semibold text-lg transition-colors shadow-lg"
+          >
+            Continue to Sign &rarr;
+          </button>
+        </div>
       </div>
 
       {/* Send Comparison Modal */}
