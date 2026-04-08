@@ -4,6 +4,7 @@ import { matchOptions, calculateMonthlyPayment } from '../utils/matchingEngine';
 import { formatCurrency } from '../utils/formatters';
 import ProgressBar from '../components/ProgressBar';
 import * as estimateStorage from '../utils/estimateStorage';
+import EnergyCalculator from '../components/EnergyCalculator';
 
 const iaqItems = [
   { key: 'preFilter', label: 'Pre Filter Ionizer', defaultPrice: 495 },
@@ -645,12 +646,11 @@ export default function PricingComparison() {
           </div>
         </div>
 
-        {/* G. ENERGY SAVINGS PLACEHOLDER */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-8 overflow-hidden">
-          <div className="p-5 text-center">
-            <p className="text-base font-semibold text-gray-700">⚡ Calculate My Energy Savings — Coming Soon</p>
-          </div>
-        </div>
+        {/* G. ENERGY SAVINGS CALCULATOR */}
+        <EnergyCalculator
+          selectedSystemSeer={activeOpt?.efficiency || 0}
+          onSavingsCalculated={() => {}}
+        />
 
         {/* H. CONTINUE */}
         <button
