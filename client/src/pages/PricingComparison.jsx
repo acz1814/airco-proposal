@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { matchOptions, calculateMonthlyPayment } from '../utils/matchingEngine';
 import { formatCurrency } from '../utils/formatters';
 import ProgressBar from '../components/ProgressBar';
+import * as estimateStorage from '../utils/estimateStorage';
 
 export default function PricingComparison() {
   const { estimateId } = useParams();
@@ -12,18 +13,20 @@ export default function PricingComparison() {
   const [loading, setLoading] = useState(true);
   const [estimate, setEstimate] = useState(null);
   const [toast, setToast] = useState(null);
-  const [selectedSystems, setSelectedSystems] = useState([]);
+  // Restore Stage 2 state from estimate-scoped storage
+  estimateStorage.setActiveEstimate(estimateId);
+  const stage2Saved = estimateStorage.getJSON('stage2_state', {}) || {};
+
+  const [selectedSystems, setSelectedSystems] = useState(stage2Saved.selectedSystems || []);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendEmail, setSendEmail] = useState('');
   const [ccEmail, setCcEmail] = useState('');
   const [sending, setSending] = useState(false);
-
-  // Per-option editable state keyed by option id
-  const [discounts, setDiscounts] = useState({});
-  const [incentives, setIncentives] = useState({});
-  const [zeroAprYears, setZeroAprYears] = useState({});
-  const [mfrRebates, setMfrRebates] = useState({});
-  const [utilityRebates, setUtilityRebates] = useState({});
+  const [discounts, setDiscounts] = useState(stage2Saved.discounts || {});
+  const [incentives, setIncentives] = useState(stage2Saved.incentives || {});
+  const [zeroAprYears, setZeroAprYears] = useState(stage2Saved.zeroAprYears || {});
+  const [mfrRebates, setMfrRebates] = useState(stage2Saved.mfrRebates || {});
+  const [utilityRebates, setUtilityRebates] = useState(stage2Saved.utilityRebates || {});
 
   const optionIds = searchParams.getAll('options');
 
@@ -38,17 +41,30 @@ export default function PricingComparison() {
             data.estimate.jobDetails.systemType,
             data.estimate.jobDetails.fuelType
           );
-          const filtered = matched.filter(o => optionIds.includes(o.id));
+          let filtered = matched.filter(o => optionIds.includes(o.id));
+          const overrides = estimateStorage.getJSON('warranty_overrides', {}) || {};
+          filtered = filtered.map(o => overrides[o.id]
+            ? { ...o, warranty: { ...o.warranty, ...overrides[o.id] } }
+            : o);
           setSelectedOptions(filtered);
-          // Initialize default 0% APR years
-          const defaultYears = {};
-          filtered.forEach(o => { defaultYears[o.id] = 10; });
-          setZeroAprYears(defaultYears);
+          // Initialize default 0% APR years for any option not already restored
+          setZeroAprYears(prev => {
+            const next = { ...prev };
+            filtered.forEach(o => { if (next[o.id] == null) next[o.id] = 10; });
+            return next;
+          });
         }
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, [estimateId]);
+
+  // Persist Stage 2 state on every change
+  useEffect(() => {
+    estimateStorage.setItem('stage2_state', {
+      discounts, incentives, zeroAprYears, mfrRebates, utilityRebates, selectedSystems,
+    });
+  }, [discounts, incentives, zeroAprYears, mfrRebates, utilityRebates, selectedSystems]);
 
   const getVal = (obj, id) => parseFloat(obj[id]) || 0;
 
@@ -181,6 +197,12 @@ export default function PricingComparison() {
 
                 {/* Pricing Rows */}
                 <div className="divide-y divide-gray-100" onClick={e => e.stopPropagation()}>
+                  {/* Warranty */}
+                  <div className="flex items-center justify-between px-5 py-3">
+                    <span className="text-sm text-gray-700">Warranty</span>
+                    <span className="text-sm font-semibold text-gray-900">{opt.warranty.parts} Parts / {opt.warranty.labor} Labor</span>
+                  </div>
+
                   {/* Total Price */}
                   <div className="flex items-center justify-between px-5 py-3">
                     <span className="text-sm font-semibold text-gray-700">Total Price</span>
@@ -205,10 +227,13 @@ export default function PricingComparison() {
                       placeholder="0" />
                   </div>
 
-                  {/* Total After Discounts */}
-                  <div className="flex items-center justify-between px-5 py-3 bg-blue-50">
-                    <span className="text-sm font-bold text-gray-900">Total After Discounts</span>
-                    <span className="font-bold text-gray-900">{formatCurrency(totalAfterDiscounts(opt))}</span>
+                  {/* Total After Discounts — ACTUAL purchase price */}
+                  <div className="px-5 py-3 bg-blue-600">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-white">Total After Discounts</span>
+                      <span className="font-bold text-white text-lg">{formatCurrency(totalAfterDiscounts(opt))}</span>
+                    </div>
+                    <p className="text-xs text-blue-100 italic mt-1">Your purchase price today</p>
                   </div>
 
                   {/* 0% APR */}
@@ -231,27 +256,36 @@ export default function PricingComparison() {
                   </div>
 
                   {/* Manufacture Rebate */}
-                  <div className="flex items-center justify-between px-5 py-3">
-                    <span className="text-sm text-gray-700">Manufacture Rebate $</span>
-                    <input type="number" min="0" className={inputClass}
-                      value={mfrRebates[opt.id] || ''}
-                      onChange={e => setMfrRebates(p => ({ ...p, [opt.id]: e.target.value }))}
-                      placeholder="0" />
+                  <div className="px-5 py-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">Manufacture Rebate $</span>
+                      <input type="number" min="0" className={inputClass}
+                        value={mfrRebates[opt.id] || ''}
+                        onChange={e => setMfrRebates(p => ({ ...p, [opt.id]: e.target.value }))}
+                        placeholder="0" />
+                    </div>
+                    <p className="text-xs italic text-gray-500 mt-1">Paid directly to customer after purchase</p>
                   </div>
 
                   {/* Utility Rebate */}
-                  <div className="flex items-center justify-between px-5 py-3 bg-gray-50">
-                    <span className="text-sm text-gray-700">Utility Rebate $</span>
-                    <input type="number" min="0" className={inputClass}
-                      value={utilityRebates[opt.id] || ''}
-                      onChange={e => setUtilityRebates(p => ({ ...p, [opt.id]: e.target.value }))}
-                      placeholder="0" />
+                  <div className="px-5 py-3 bg-gray-50">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">Utility Rebate $</span>
+                      <input type="number" min="0" className={inputClass}
+                        value={utilityRebates[opt.id] || ''}
+                        onChange={e => setUtilityRebates(p => ({ ...p, [opt.id]: e.target.value }))}
+                        placeholder="0" />
+                    </div>
+                    <p className="text-xs italic text-gray-500 mt-1">Credited on first utility bill after installation</p>
                   </div>
 
-                  {/* Net Investment */}
-                  <div className="flex items-center justify-between px-5 py-3 bg-orange-50">
-                    <span className="text-sm font-bold text-gray-900">Net Investment</span>
-                    <span className="font-bold text-lg text-gray-900">{formatCurrency(netInvestment(opt))}</span>
+                  {/* Net Investment (after rebates) */}
+                  <div className="px-5 py-3 bg-orange-50">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-gray-700">Net Investment (after rebates)</span>
+                      <span className="font-semibold text-gray-700">{formatCurrency(netInvestment(opt))}</span>
+                    </div>
+                    <p className="text-xs italic text-gray-500 mt-1">Rebates are not applied at time of purchase. Total After Discounts above is your purchase price today.</p>
                   </div>
                 </div>
 
@@ -274,24 +308,26 @@ export default function PricingComparison() {
 
         {/* Bottom Action Buttons */}
         <div className="max-w-xl mx-auto space-y-3">
-          {selectedSystems.length === 1 && (
+          {(selectedSystems.length === 1 || selectedOptions.length === 1) && (
             <button
               onClick={() => {
-                const opt = selectedOptions.find(o => o.id === selectedSystems[0]);
+                const targetId = selectedSystems[0] || selectedOptions[0]?.id;
+                const opt = selectedOptions.find(o => o.id === targetId);
                 if (opt) {
-                  sessionStorage.setItem('airco_net_investment', JSON.stringify({
+                  estimateStorage.setItem('net_investment', {
                     netInvestment: netInvestment(opt),
+                    totalAfterDiscounts: totalAfterDiscounts(opt),
                     systemName: opt.systemName,
                     tier: opt.tier,
                     efficiency: opt.efficiency,
                     warranty: opt.warranty,
-                  }));
+                  });
                 }
-                navigate(`/proposal/${estimateId}/customize?option=${selectedSystems[0]}`);
+                navigate(`/proposal/${estimateId}/customize?option=${targetId}`);
               }}
               className="w-full rounded-xl px-8 py-3 font-semibold transition-colors text-lg bg-blue-700 hover:bg-blue-800 text-white cursor-pointer"
             >
-              Select This System & Sign
+              Select This System & Customize
             </button>
           )}
           <button

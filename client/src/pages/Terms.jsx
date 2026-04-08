@@ -3,6 +3,7 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import ProgressBar from '../components/ProgressBar';
 import { matchOptions } from '../utils/matchingEngine';
 import { fireTrigger, formatCurrency } from '../utils/formatters';
+import * as estimateStorage from '../utils/estimateStorage';
 
 export default function Terms() {
   const { estimateId } = useParams();
@@ -18,6 +19,8 @@ export default function Terms() {
   const signatureRef = useRef(null);
 
   const optionId = searchParams.get('option');
+
+  useEffect(() => { estimateStorage.setActiveEstimate(estimateId); }, [estimateId]);
 
   useEffect(() => {
     fetch(`/api/estimates/${estimateId}`)
@@ -35,10 +38,8 @@ export default function Terms() {
             if (found) setSelectedSystem(found);
           }
         }
-        try {
-          const stored = sessionStorage.getItem('airco_customize_summary');
-          if (stored) setSummary(JSON.parse(stored));
-        } catch {}
+        const stored = estimateStorage.getJSON('customize_summary');
+        if (stored) setSummary(stored);
       });
   }, [estimateId, optionId]);
 
@@ -105,7 +106,7 @@ export default function Terms() {
     });
     setSubmitting(false);
     // Navigate to checkout/payment page
-    const customizeData = JSON.parse(sessionStorage.getItem(`customize_${estimateId}`) || '{}');
+    const customizeData = estimateStorage.getJSON('customize_data', {}) || {};
     navigate(`/proposal/${estimateId}/checkout`, {
       state: {
         selectedOption: selectedSystem,

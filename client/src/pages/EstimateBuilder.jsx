@@ -1,13 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import NavBar from '../components/NavBar';
+import * as estimateStorage from '../utils/estimateStorage';
 
 export default function EstimateBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = !!id;
 
-  const DRAFT_KEY = 'airco_draft';
+  const DRAFT_KEY = 'draft';
+  const PHOTOS_KEY = 'photos';
+
+  // Track which estimate id our scoped storage uses. For new drafts we create
+  // a temporary id; once the estimate is saved we migrate to the real id.
+  const [photoEstimateId, setPhotoEstimateId] = useState(() => id || `est-new-${Date.now()}`);
+  useEffect(() => { estimateStorage.setActiveEstimate(photoEstimateId); }, [photoEstimateId]);
 
   const [form, setForm] = useState(() => {
     const defaults = {
@@ -16,17 +23,23 @@ export default function EstimateBuilder() {
       tonnage: '3', systemType: 'split', fuelType: 'electric', notes: ''
     };
     if (!id) {
-      try {
-        const saved = sessionStorage.getItem(DRAFT_KEY);
-        if (saved) return { ...defaults, ...JSON.parse(saved) };
-      } catch {}
+      const saved = estimateStorage.getJSON(DRAFT_KEY);
+      if (saved) return { ...defaults, ...saved };
     }
     return defaults;
   });
   const [toast, setToast] = useState(null);
   const [generating, setGenerating] = useState(false);
-  const [photos, setPhotos] = useState([null, null, null]);
+  const [photos, setPhotos] = useState(() => {
+    const saved = estimateStorage.getJSON(PHOTOS_KEY);
+    if (Array.isArray(saved) && saved.length === 3) return saved;
+    return [null, null, null];
+  });
   const fileInputRefs = [useRef(null), useRef(null), useRef(null)];
+
+  useEffect(() => {
+    estimateStorage.setItem(PHOTOS_KEY, photos);
+  }, [photos, photoEstimateId]);
 
   const handlePhotoSelect = (index, e) => {
     const file = e.target.files?.[0];
@@ -73,9 +86,7 @@ export default function EstimateBuilder() {
 
   const handleChange = (field, value) => setForm(prev => {
     const next = { ...prev, [field]: value };
-    if (!isEdit) {
-      try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(next)); } catch {}
-    }
+    if (!isEdit) estimateStorage.setItem(DRAFT_KEY, next);
     return next;
   });
 
@@ -111,6 +122,10 @@ export default function EstimateBuilder() {
         const data = await res.json();
         if (!data.estimate) throw new Error('Failed to create estimate');
         eid = data.estimate.id;
+        // Migrate scoped state from temp id to the real estimate id
+        estimateStorage.migrateEstimate(photoEstimateId, eid);
+        estimateStorage.setActiveEstimate(eid);
+        setPhotoEstimateId(eid);
       }
 
       const params = new URLSearchParams();

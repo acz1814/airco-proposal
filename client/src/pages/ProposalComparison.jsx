@@ -6,6 +6,7 @@ import ProgressBar from '../components/ProgressBar';
 import OptionDetail from './OptionDetail';
 import { matchOptions } from '../utils/matchingEngine';
 import { fireTrigger } from '../utils/formatters';
+import * as estimateStorage from '../utils/estimateStorage';
 
 export default function ProposalComparison() {
   const { estimateId } = useParams();
@@ -25,6 +26,29 @@ export default function ProposalComparison() {
   const viewedRef = useRef(false);
 
   const urlOptionIds = searchParams.getAll('options');
+  const WARRANTY_KEY = 'warranty_overrides';
+
+  useEffect(() => { estimateStorage.setActiveEstimate(estimateId); }, [estimateId]);
+
+  const applyWarrantyOverrides = (opts) => {
+    const overrides = estimateStorage.getJSON(WARRANTY_KEY, {});
+    return opts.map(o => overrides[o.id]
+      ? { ...o, warranty: { ...o.warranty, ...overrides[o.id] } }
+      : o);
+  };
+
+  const handleWarrantyChange = (optId, field, years) => {
+    const newVal = `${years} Years`;
+    setOptions(prev => prev.map(o =>
+      o.id === optId ? { ...o, warranty: { ...o.warranty, [field]: newVal } } : o
+    ));
+    const overrides = estimateStorage.getJSON(WARRANTY_KEY, {});
+    overrides[optId] = { ...(overrides[optId] || {}), [field]: newVal };
+    estimateStorage.setItem(WARRANTY_KEY, overrides);
+    setDetailOption(prev => (prev && prev.id === optId)
+      ? { ...prev, warranty: { ...prev.warranty, [field]: newVal } }
+      : prev);
+  };
 
   useEffect(() => {
     fetch(`/api/estimates/${estimateId}`)
@@ -39,11 +63,10 @@ export default function ProposalComparison() {
             data.estimate.jobDetails.fuelType
           );
           // Filter to only URL-specified options, or show all if none specified
-          if (urlOptionIds.length > 0) {
-            setOptions(matched.filter(o => urlOptionIds.includes(o.id)));
-          } else {
-            setOptions(matched);
-          }
+          const filteredMatched = urlOptionIds.length > 0
+            ? matched.filter(o => urlOptionIds.includes(o.id))
+            : matched;
+          setOptions(applyWarrantyOverrides(filteredMatched));
 
           // Fire viewed trigger once
           if (!data.estimate.viewedAt && !viewedRef.current) {
@@ -76,13 +99,15 @@ export default function ProposalComparison() {
   };
 
   const saveSystemToSession = (opt) => {
-    sessionStorage.setItem('airco_net_investment', JSON.stringify({
+    estimateStorage.setItem('net_investment', {
       netInvestment: opt.totalPrice,
+      totalAfterDiscounts: opt.totalPrice,
       systemName: opt.systemName,
       tier: opt.tier,
       efficiency: opt.efficiency,
+      tonnage: opt.tonnage,
       warranty: opt.warranty,
-    }));
+    });
   };
 
   const handleApproveSign = () => {
@@ -165,6 +190,7 @@ export default function ProposalComparison() {
               isSelected={compareIds.includes(opt.id)}
               onSelect={handleCompareToggle}
               onLearnMore={setDetailOption}
+              onWarrantyChange={handleWarrantyChange}
             />
           ))}
         </div>

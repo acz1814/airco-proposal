@@ -96,4 +96,54 @@ router.post('/contract', (req, res) => {
   });
 });
 
+// PHASE 2 PRODUCTION WIRING:
+// Replace the mock console.log with a real email send (GHL Conversations API or
+// standalone SMTP via nodemailer). The payload shape below is the contract —
+// keep field names stable so the client does not need to change.
+router.post('/receipt', (req, res) => {
+  const {
+    estimateId,
+    homeownerEmail,
+    ccEmail,
+    homeownerName,
+    systemName,
+    tier,
+    totalAfterDiscounts,
+    iaqItems,
+    grandTotal,
+    paymentMethod,
+    netInvestment,
+    mfrRebate,
+    utilityRebate,
+    signedAgreement,
+    photoDataUrls,
+    timestamp,
+  } = req.body || {};
+
+  console.log('[GHL Receipt] Email customer receipt:');
+  console.log('  estimateId:', estimateId);
+  console.log('  to:', homeownerEmail, '| cc:', ccEmail || '(none)');
+  console.log('  system:', systemName, tier);
+  console.log('  totalAfterDiscounts:', totalAfterDiscounts, '| grandTotal:', grandTotal);
+  console.log('  paymentMethod:', paymentMethod, '| netInvestment:', netInvestment);
+  console.log('  rebates: mfr=', mfrRebate, '| utility=', utilityRebate);
+  console.log('  signedAgreement:', signedAgreement);
+  console.log('  iaqItems:', Array.isArray(iaqItems) ? iaqItems.length : 0);
+  console.log('  photos:', Array.isArray(photoDataUrls) ? photoDataUrls.length : 0);
+
+  if (estimateId) {
+    db.logActivity(estimateId, 'receipt_emailed', {
+      homeownerEmail, ccEmail: ccEmail || null, systemName, grandTotal,
+    });
+  }
+
+  res.json({
+    sent: true,
+    receiptId: `mock_receipt_${Date.now().toString(36)}`,
+    homeownerEmail,
+    ccEmail: ccEmail || null,
+    timestamp: timestamp || new Date().toISOString(),
+  });
+});
+
 export default router;

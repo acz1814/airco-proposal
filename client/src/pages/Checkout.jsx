@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import ProgressBar from '../components/ProgressBar';
 import { matchOptions } from '../utils/matchingEngine';
 import { formatCurrency, fireTrigger } from '../utils/formatters';
+import * as estimateStorage from '../utils/estimateStorage';
 
 export default function Checkout() {
   const { estimateId } = useParams();
@@ -14,17 +15,18 @@ export default function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [sendingReceipt, setSendingReceipt] = useState(false);
 
-  // Payment state
-  const [paymentChoice, setPaymentChoice] = useState('deposit');
+  // Payment state — value is the canonical key sent to the server
+  const [paymentMethod, setPaymentMethod] = useState('deposit');
   const [depositAmount, setDepositAmount] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
   const [nameOnCard, setNameOnCard] = useState('');
 
-  // Customize data from sessionStorage
-  const customizeData = JSON.parse(sessionStorage.getItem(`customize_${estimateId}`) || '{}');
-  const summaryData = JSON.parse(sessionStorage.getItem('airco_customize_summary') || '{}');
+  // Customize data from estimate-scoped storage
+  estimateStorage.setActiveEstimate(estimateId);
+  const customizeData = estimateStorage.getJSON('customize_data', {}) || {};
+  const summaryData = estimateStorage.getJSON('customize_summary', {}) || {};
   const iaqTotal = customizeData.iaqIncluded ? (customizeData.iaqAfterDiscount || 0) : 0;
   const miscTotal = customizeData.miscIncluded ? (customizeData.miscAfterDiscount || 0) : 0;
 
@@ -53,6 +55,15 @@ export default function Checkout() {
   // Default deposit to 10% of grand total
   const effectiveDeposit = depositAmount !== '' ? (parseFloat(depositAmount) || 0) : Math.round(grandTotal * 0.1);
 
+  const chargeAmount =
+    paymentMethod === 'pay_in_full' ? grandTotal :
+    paymentMethod === 'deposit' ? effectiveDeposit :
+    0;
+  const paymentStatus =
+    paymentMethod === 'pay_in_full' ? 'paid_in_full' :
+    paymentMethod === 'deposit' ? 'deposit_paid' :
+    'pending';
+
   const formatCardNumber = (value) => {
     const digits = value.replace(/\D/g, '').slice(0, 16);
     return digits.replace(/(.{4})/g, '$1 ').trim();
@@ -66,6 +77,13 @@ export default function Checkout() {
 
   const handleComplete = async () => {
     setSubmitting(true);
+    try {
+    // Persist signed-agreement record for the Confirmation receipt
+    estimateStorage.setItem('signature', {
+      signerName: location.state?.signature || '',
+      initials: location.state?.initials || '',
+      timestamp: new Date().toISOString(),
+    });
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     await fetch(`/api/estimates/${estimateId}/accept`, {
@@ -77,23 +95,25 @@ export default function Checkout() {
         iaqTotal,
         miscTotal,
         finalTotal: grandTotal,
-        paymentMethod: paymentChoice === 'deposit' ? 'deposit' : 'bill_on_completion',
-        paymentStatus: paymentChoice === 'deposit' ? 'deposit_paid' : 'pending',
-        depositAmount: paymentChoice === 'deposit' ? effectiveDeposit : 0,
+        paymentMethod,
+        paymentStatus,
+        depositAmount: chargeAmount,
         paymentId: `mock_pi_${Date.now().toString(36)}`,
         signature: location.state?.signature || ''
       })
     });
 
     await fireTrigger(estimateId, 'payment_completed', {
-      method: paymentChoice,
-      amount: paymentChoice === 'deposit' ? effectiveDeposit : grandTotal
+      method: paymentMethod,
+      paymentMethod,
+      amount: chargeAmount,
+      paymentAmount: chargeAmount,
     });
     await fireTrigger(estimateId, 'estimate_accepted');
 
     // Send mock receipt email
     setSendingReceipt(true);
-    const netInvestmentData = JSON.parse(sessionStorage.getItem('airco_net_investment') || '{}');
+    const netInvestmentData = estimateStorage.getJSON('net_investment', {}) || {};
     const cardDigits = cardNumber.replace(/\D/g, '');
     const homeownerEmail = estimate?.homeowner?.email || '';
     const homeownerName = `${estimate?.homeowner?.firstName || ''} ${estimate?.homeowner?.lastName || ''}`.trim();
@@ -123,8 +143,8 @@ export default function Checkout() {
         apr0Monthly: summaryData.apr0Monthly || 0,
         apr699Monthly: summaryData.apr699Monthly || 0,
         apr0Years: summaryData.apr0Years || 0,
-        paymentMethod: paymentChoice === 'deposit' ? 'deposit' : 'bill_on_completion',
-        depositAmount: paymentChoice === 'deposit' ? effectiveDeposit : 0,
+        paymentMethod,
+        depositAmount: chargeAmount,
         cardLast4: cardDigits.length >= 4 ? cardDigits.slice(-4) : '',
         initials: location.state?.initials || '',
         signature: location.state?.signature || '',
@@ -133,14 +153,29 @@ export default function Checkout() {
     });
     setSendingReceipt(false);
 
+    console.log('SUBMITTING — paymentMethod:', paymentMethod, 'chargeAmount:', chargeAmount);
     navigate(`/proposal/${estimateId}/confirm`, {
       state: {
         selectedOption,
         finalTotal: grandTotal,
-        paymentMethod: paymentChoice,
+        paymentMethod,
+        chargeAmount,
         homeownerEmail,
       }
     });
+    } catch (err) {
+      console.error('Checkout completion error', err);
+      setSendingReceipt(false);
+      navigate(`/proposal/${estimateId}/confirm`, {
+        state: {
+          selectedOption,
+          finalTotal: grandTotal,
+          paymentMethod,
+          chargeAmount,
+          homeownerEmail: estimate?.homeowner?.email || '',
+        }
+      });
+    }
   };
 
   if (!selectedOption) {
@@ -162,14 +197,14 @@ export default function Checkout() {
 
       <div className="max-w-3xl mx-auto px-6 py-8">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate(`/proposal/${estimateId}/customize?option=${selectedOption?.id || ''}`)}
           className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors mb-4"
           style={{ padding: '16px' }}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          <span className="text-sm font-medium">Back</span>
+          <span className="text-sm font-medium">Back to Proposal</span>
         </button>
 
         <ProgressBar currentStep={3} />
@@ -218,8 +253,8 @@ export default function Checkout() {
               <input
                 type="radio"
                 name="payment"
-                checked={paymentChoice === 'deposit'}
-                onChange={() => setPaymentChoice('deposit')}
+                checked={paymentMethod === 'deposit'}
+                onChange={() => setPaymentMethod('deposit')}
                 className="w-4 h-4 text-blue-600"
               />
               <span className="font-medium text-gray-900">Pay Deposit Now</span>
@@ -228,29 +263,54 @@ export default function Checkout() {
               <input
                 type="radio"
                 name="payment"
-                checked={paymentChoice === 'bill'}
-                onChange={() => setPaymentChoice('bill')}
+                checked={paymentMethod === 'pay_in_full'}
+                onChange={() => setPaymentMethod('pay_in_full')}
+                className="w-4 h-4 text-blue-600"
+              />
+              <span className="font-medium text-gray-900">Pay in Full Now</span>
+            </label>
+            <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-blue-400 cursor-pointer transition-colors">
+              <input
+                type="radio"
+                name="payment"
+                checked={paymentMethod === 'bill_on_completion'}
+                onChange={() => setPaymentMethod('bill_on_completion')}
                 className="w-4 h-4 text-blue-600"
               />
               <span className="font-medium text-gray-900">Bill on Completion</span>
             </label>
           </div>
 
-          {paymentChoice === 'deposit' && (
+          {(paymentMethod === 'deposit' || paymentMethod === 'pay_in_full') && (
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Deposit Amount</label>
-                <div className="flex items-center gap-1">
-                  <span className="text-gray-500">$</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={depositAmount !== '' ? depositAmount : Math.round(grandTotal * 0.1)}
-                    onChange={e => setDepositAmount(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
+              {paymentMethod === 'deposit' ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Deposit Amount</label>
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={depositAmount !== '' ? depositAmount : Math.round(grandTotal * 0.1)}
+                      onChange={e => setDepositAmount(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Payment Amount</label>
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">$</span>
+                    <input
+                      type="text"
+                      readOnly
+                      value={grandTotal}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100 text-gray-700 outline-none"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Card Number</label>

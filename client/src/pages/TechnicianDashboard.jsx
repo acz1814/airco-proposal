@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import NavBar from '../components/NavBar';
 import StatusBadge from '../components/StatusBadge';
 import { formatCurrency, formatDate } from '../utils/formatters';
+import * as estimateStorage from '../utils/estimateStorage';
 
 export default function TechnicianDashboard() {
   const [estimates, setEstimates] = useState([]);
@@ -78,7 +79,7 @@ export default function TechnicianDashboard() {
                       <td className="px-6 py-4 text-sm text-gray-500">{formatDate(est.createdAt)}</td>
                       <td className="px-6 py-4">
                         <button
-                          onClick={() => navigate(`/tech/estimate/${est.id}`)}
+                          onClick={() => { estimateStorage.setActiveEstimate(est.id); navigate(`/tech/estimate/${est.id}`); }}
                           className="text-blue-700 hover:text-blue-800 text-sm font-semibold"
                         >
                           View

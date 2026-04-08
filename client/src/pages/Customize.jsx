@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import ProgressBar from '../components/ProgressBar';
 import { calculateMonthlyPayment } from '../utils/matchingEngine';
 import { formatCurrency } from '../utils/formatters';
+import * as estimateStorage from '../utils/estimateStorage';
 
 const iaqItems = [
   { key: 'preFilter', label: 'Pre Filter Ionizer', defaultPrice: 495 },
@@ -32,8 +33,12 @@ export default function Customize() {
   const restoredRef = useRef(false);
 
   // IAQ state
-  const [iaqIncluded, setIaqIncluded] = useState(false);
-  const [iaqChecked, setIaqChecked] = useState({});
+  const [iaqIncluded, setIaqIncluded] = useState(true);
+  const [iaqChecked, setIaqChecked] = useState(() => {
+    const d = {};
+    iaqItems.forEach(i => { d[i.key] = true; });
+    return d;
+  });
   const [iaqPrices, setIaqPrices] = useState(getDefaultIaqPrices);
   const [iaqDiscount, setIaqDiscount] = useState(0);
 
@@ -44,43 +49,51 @@ export default function Customize() {
 
   const optionId = searchParams.get('option');
 
-  // Restore form state from sessionStorage on mount
+  useEffect(() => { estimateStorage.setActiveEstimate(estimateId); }, [estimateId]);
+
+  // Restore form state from estimate-scoped storage on mount
   useEffect(() => {
     if (restoredRef.current) return;
     restoredRef.current = true;
-    try {
-      const saved = sessionStorage.getItem('airco_customize_form');
-      if (saved) {
-        const s = JSON.parse(saved);
-        if (s.iaqIncluded !== undefined) setIaqIncluded(s.iaqIncluded);
-        if (s.iaqChecked) setIaqChecked(s.iaqChecked);
-        if (s.iaqPrices) setIaqPrices(s.iaqPrices);
-        if (s.iaqDiscount !== undefined) setIaqDiscount(s.iaqDiscount);
-        if (s.miscDescription !== undefined) setMiscDescription(s.miscDescription);
-        if (s.miscDiscount !== undefined) setMiscDiscount(s.miscDiscount);
-        if (s.miscAprYears !== undefined) setMiscAprYears(s.miscAprYears);
+    const s = estimateStorage.getJSON('customize_form');
+    if (!s) return;
+    if (s.iaqIncluded !== undefined) setIaqIncluded(s.iaqIncluded);
+    if (s.iaqChecked && typeof s.iaqChecked === 'object') {
+      const savedVals = Object.values(s.iaqChecked);
+      const allFalse = savedVals.length > 0 && savedVals.every(v => v === false);
+      if (!allFalse) {
+        setIaqChecked(prev => {
+          const next = { ...prev };
+          Object.entries(s.iaqChecked).forEach(([k, v]) => {
+            if (v === false) next[k] = false;
+          });
+          return next;
+        });
       }
-    } catch {}
+    }
+    if (s.iaqPrices) setIaqPrices(s.iaqPrices);
+    if (s.iaqDiscount !== undefined) setIaqDiscount(s.iaqDiscount);
+    if (s.miscDescription !== undefined) setMiscDescription(s.miscDescription);
+    if (s.miscDiscount !== undefined) setMiscDiscount(s.miscDiscount);
+    if (s.miscAprYears !== undefined) setMiscAprYears(s.miscAprYears);
   }, []);
 
-  // Persist form state to sessionStorage on every change
+  // Persist form state on every change
   useEffect(() => {
-    sessionStorage.setItem('airco_customize_form', JSON.stringify({
+    estimateStorage.setItem('customize_form', {
       iaqIncluded, iaqChecked, iaqPrices, iaqDiscount,
       miscDescription, miscDiscount, miscAprYears,
-    }));
+    });
   }, [iaqIncluded, iaqChecked, iaqPrices, iaqDiscount, miscDescription, miscDiscount, miscAprYears]);
 
-  // Load estimate + read system info from sessionStorage
+  // Load estimate + read system info from estimate-scoped storage
   useEffect(() => {
     fetch(`/api/estimates/${estimateId}`)
       .then(r => r.json())
       .then(data => {
         if (data.estimate) setEstimate(data.estimate);
-        try {
-          const stored = sessionStorage.getItem('airco_net_investment');
-          if (stored) setSelectedSystem(JSON.parse(stored));
-        } catch {}
+        const stored = estimateStorage.getJSON('net_investment');
+        if (stored) setSelectedSystem(stored);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -92,7 +105,7 @@ export default function Customize() {
     : 0;
   const iaqNet = Math.max(0, iaqSubtotal - (parseFloat(iaqDiscount) || 0));
 
-  const systemPrice = selectedSystem?.netInvestment || 0;
+  const systemPrice = selectedSystem?.totalAfterDiscounts ?? selectedSystem?.netInvestment ?? 0;
 
   // Combined section calculations
   const combinedTotal = iaqNet + systemPrice;
@@ -114,8 +127,8 @@ export default function Customize() {
       miscDiscount: parseFloat(miscDiscount) || 0,
       combinedAfterDiscount,
     };
-    sessionStorage.setItem(`customize_${estimateId}`, JSON.stringify(customizeData));
-    sessionStorage.setItem('airco_customize_summary', JSON.stringify({
+    estimateStorage.setItem('customize_data', customizeData);
+    estimateStorage.setItem('customize_summary', {
       systemName: selectedSystem?.systemName || '',
       tier: selectedSystem?.tier || '',
       seer2: selectedSystem?.efficiency || '',
@@ -128,7 +141,7 @@ export default function Customize() {
       apr699Monthly: combinedFixedAprMonthly,
       apr0Years: miscAprYears,
       miscDescription,
-    }));
+    });
     navigate(`/proposal/${estimateId}/terms?option=${optionId}`);
   };
 
@@ -190,8 +203,8 @@ export default function Customize() {
                 <p className="font-semibold text-gray-900">{selectedSystem.efficiency}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Net Investment</p>
-                <p className="font-semibold text-gray-900">{formatCurrency(systemPrice)}</p>
+                <p className="text-xs text-gray-500">Total After Discounts</p>
+                <p className="font-semibold text-gray-900">{formatCurrency(selectedSystem?.totalAfterDiscounts ?? systemPrice)}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Warranty</p>
@@ -217,7 +230,7 @@ export default function Customize() {
               <span className="font-semibold text-gray-900">Include Indoor Air Quality System</span>
             </label>
 
-            {iaqIncluded && (
+            {(
               <div className="space-y-6">
                 {/* IAQ Diagram */}
                 <div className="flex justify-center">

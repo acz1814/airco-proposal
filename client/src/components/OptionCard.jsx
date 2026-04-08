@@ -17,7 +17,9 @@ function parseWarrantyYears(str) {
   return m ? parseInt(m[1], 10) : 1;
 }
 
-export default function OptionCard({ option, isSelected, onSelect, onLearnMore }) {
+export default function OptionCard({ option, isSelected, onSelect, onLearnMore, onWarrantyChange }) {
+  const partsYears = parseWarrantyYears(option.warranty.parts);
+  const laborYears = parseWarrantyYears(option.warranty.labor);
   return (
     <div className={`relative bg-white rounded-2xl border-2 p-6 transition-all hover:shadow-lg flex flex-col
       ${isSelected ? 'border-blue-700 shadow-lg' : tierColors[option.tier] || 'border-gray-200'}
@@ -58,7 +60,9 @@ export default function OptionCard({ option, isSelected, onSelect, onLearnMore }
             <span className="font-medium text-gray-600">Warranty:</span>
             <span>Parts</span>
             <select
-              defaultValue={parseWarrantyYears(option.warranty.parts)}
+              value={partsYears}
+              onChange={(e) => onWarrantyChange?.(option.id, 'parts', parseInt(e.target.value, 10))}
+              onClick={(e) => e.stopPropagation()}
               className="border border-gray-200 rounded px-1.5 py-0.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
@@ -70,7 +74,9 @@ export default function OptionCard({ option, isSelected, onSelect, onLearnMore }
             <span></span>
             <span>Labor</span>
             <select
-              defaultValue={parseWarrantyYears(option.warranty.labor)}
+              value={laborYears}
+              onChange={(e) => onWarrantyChange?.(option.id, 'labor', parseInt(e.target.value, 10))}
+              onClick={(e) => e.stopPropagation()}
               className="border border-gray-200 rounded px-1.5 py-0.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
