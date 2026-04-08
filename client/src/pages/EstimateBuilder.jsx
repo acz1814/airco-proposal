@@ -30,12 +30,17 @@ export default function EstimateBuilder() {
   });
   const [toast, setToast] = useState(null);
   const [generating, setGenerating] = useState(false);
+  const PHOTO_SLOTS = 12;
   const [photos, setPhotos] = useState(() => {
     const saved = estimateStorage.getJSON(PHOTOS_KEY);
-    if (Array.isArray(saved) && saved.length === 3) return saved;
-    return [null, null, null];
+    if (Array.isArray(saved)) {
+      const next = Array(PHOTO_SLOTS).fill(null);
+      saved.slice(0, PHOTO_SLOTS).forEach((p, i) => { next[i] = p; });
+      return next;
+    }
+    return Array(PHOTO_SLOTS).fill(null);
   });
-  const fileInputRefs = [useRef(null), useRef(null), useRef(null)];
+  const fileInputRefs = useRef(Array(PHOTO_SLOTS).fill(null).map(() => ({ current: null }))).current;
 
   useEffect(() => {
     estimateStorage.setItem(PHOTOS_KEY, photos);
@@ -268,11 +273,11 @@ export default function EstimateBuilder() {
           <div className="space-y-6">
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Job Site Photos (Optional)</h2>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {photos.map((photo, i) => (
                   <div key={i} className="relative">
                     <input
-                      ref={fileInputRefs[i]}
+                      ref={el => { fileInputRefs[i].current = el; }}
                       type="file"
                       accept="image/*"
                       capture="environment"

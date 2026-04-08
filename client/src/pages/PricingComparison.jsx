@@ -276,7 +276,6 @@ export default function PricingComparison() {
                         onChange={e => setUtilityRebates(p => ({ ...p, [opt.id]: e.target.value }))}
                         placeholder="0" />
                     </div>
-                    <p className="text-xs italic text-gray-500 mt-1">Credited on first utility bill after installation</p>
                   </div>
 
                   {/* Net Investment (after rebates) */}

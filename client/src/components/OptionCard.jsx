@@ -69,7 +69,7 @@ export default function OptionCard({ option, isSelected, onSelect, onLearnMore, 
                 <option key={n} value={n}>{n}</option>
               ))}
             </select>
-            <span>yr</span>
+            <span>yr**</span>
             <span></span>
             <span></span>
             <span>Labor</span>
@@ -83,7 +83,7 @@ export default function OptionCard({ option, isSelected, onSelect, onLearnMore, 
                 <option key={n} value={n}>{n}</option>
               ))}
             </select>
-            <span>yr</span>
+            <span>yr***</span>
             <span></span>
           </div>
         </div>

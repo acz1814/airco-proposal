@@ -21,6 +21,7 @@ export default function TechnicianDashboard() {
     total: estimates.length,
     accepted: estimates.filter(e => e.status === 'accepted').length,
     pending: estimates.filter(e => ['sent', 'opened', 'explored', 'option_selected', 'financing_started'].includes(e.status)).length,
+    declined: estimates.filter(e => e.status === 'declined').length,
     avgValue: estimates.filter(e => e.finalTotal).length > 0
       ? Math.round(estimates.filter(e => e.finalTotal).reduce((s, e) => s + e.finalTotal, 0) / estimates.filter(e => e.finalTotal).length)
       : 0
@@ -32,11 +33,12 @@ export default function TechnicianDashboard() {
       <div className="max-w-7xl mx-auto px-6 py-8">
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight mb-6">Dashboard</h1>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           {[
             { label: 'Estimates This Month', value: stats.total, color: 'text-gray-900' },
             { label: 'Accepted', value: stats.accepted, color: 'text-green-600' },
             { label: 'Pending', value: stats.pending, color: 'text-yellow-600' },
+            { label: 'Declined', value: stats.declined, color: 'text-red-600' },
             { label: 'Avg. Job Value', value: formatCurrency(stats.avgValue), color: 'text-blue-700' }
           ].map((stat, i) => (
             <div key={i} className="bg-white rounded-2xl border border-gray-200 p-6">

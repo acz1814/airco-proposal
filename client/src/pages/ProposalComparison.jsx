@@ -251,6 +251,11 @@ export default function ProposalComparison() {
           </p>
         </div>
 
+        <div className="mt-8 text-xs text-gray-500 space-y-1">
+          <p>** Parts warranty subject to manufacturer terms and conditions</p>
+          <p>*** Labor warranty subject to installer terms and conditions</p>
+        </div>
+
       </div>
 
       {/* Send for Remote Review Modal */}
